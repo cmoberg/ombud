@@ -12,13 +12,17 @@ Parameters:
     Description: "S3 key prefix for profile YAMLs."
   CandidateId:
     Type: String
-    Default: "cmoberg"
+    Default: "candidate"
     Description: "Candidate profile ID (filename without .yaml). Set to your own ID when forking."
   AdminToken:
     Type: String
     NoEcho: true
     Default: ""
     Description: "Bearer token required for profile write operations (PUT /api/profile). Set a strong random value."
+  PublicBaseUrl:
+    Type: String
+    Default: ""
+    Description: "Optional public HTTPS base URL for the web UI and displayed MCP endpoint (for example https://ombud.cmoberg.com)."
   CorsAllowOrigin:
     Type: String
     Default: "*"
@@ -46,21 +50,28 @@ Resources:
           PROFILE_KEY_PREFIX: !Ref ProfileKeyPrefix
           CANDIDATE_ID: !Ref CandidateId
           ADMIN_TOKEN: !Ref AdminToken
+          PUBLIC_BASE_URL: !Ref PublicBaseUrl
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
           AllowOrigins: !Split [",", !Ref CorsAllowOrigin]
-          AllowMethods: ["GET", "POST", "PUT", "OPTIONS"]
+          AllowMethods: ["GET", "POST", "PUT", "DELETE"]
           AllowHeaders: ["*"]
           MaxAge: 86400
-      Policies:
-        - !If
-          - HasProfileBucket
-          - Statement:
-              - Effect: Allow
-                Action: ["s3:GetObject", "s3:PutObject"]
-                Resource: !Sub "arn:aws:s3:::${ProfileBucket}/${ProfileKeyPrefix}/*"
-          - !Ref AWS::NoValue
+
+  OmbudS3Policy:
+    Type: AWS::IAM::Policy
+    Condition: HasProfileBucket
+    Properties:
+      PolicyName: OmbudS3Access
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ["s3:GetObject", "s3:PutObject"]
+            Resource: !Sub "arn:aws:s3:::${ProfileBucket}/${ProfileKeyPrefix}/*"
+      Roles:
+        - !Ref OmbudFunctionRole
 
 Conditions:
   HasProfileBucket: !Not [!Equals [!Ref ProfileBucket, ""]]

@@ -1,5 +1,5 @@
 schema_version: "1.0"
-candidate_id: "cmoberg"
+candidate_id: "candidate"
 profile_version: "2026-05-04"
 updated_at: "2026-05-04T00:00:00Z"
 completeness_score: 0.90
@@ -230,7 +230,7 @@ search:
     relocation_excluded: []
 
   compensation:
-    base_minimum_usd: null   # Set in profiles/cmoberg.private.yaml — do not commit
+    base_minimum_usd: null   # Set in profiles/candidate.private.yaml — do not commit
     equity_required: true
     notes: "Equity is a requirement. Open to below-market base for meaningful founder-level equity."
 

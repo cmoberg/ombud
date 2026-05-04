@@ -17,15 +17,13 @@ from fit_engine import compute_fit_signal
 from logger import log_tool_call
 from profile import apply_withheld, load_profile, read_raw_profile, save_raw_profile
 
-_DEFAULT_CANDIDATE = os.environ.get("CANDIDATE_ID", "cmoberg")
+_DEFAULT_CANDIDATE = os.environ.get("CANDIDATE_ID", "candidate")
 _ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 _USER_TOKEN = os.environ.get("USER_TOKEN") or _ADMIN_TOKEN
 _AUTH_COOKIE = "ombud_auth"
+_PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 
 _PROFILE_REQUIRED_KEYS = {"identity", "experience", "education", "skills", "search", "culture", "consent"}
-
-mcp = FastMCP("Ombud — Carl Moberg", stateless_http=True, json_response=True)
-# streamable_http_path defaults to "/mcp" — endpoint is {base}/mcp
 
 
 def _load_employer_profile() -> dict:
@@ -70,9 +68,20 @@ def _loggable_fit_inputs(role_title: str, company_name: Optional[str]) -> dict:
     return inputs
 
 
-# ── MCP tools ────────────────────────────────────────────────────────────────
+def _public_base_url(request: Request) -> str:
+    if _PUBLIC_BASE_URL:
+        return _PUBLIC_BASE_URL
 
-@mcp.tool()
+    proto = request.headers.get("x-forwarded-proto")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if proto and host:
+        return f"{proto}://{host}"
+
+    return str(request.base_url).rstrip("/")
+
+
+# ── MCP tool logic ────────────────────────────────────────────────────────────
+
 def get_profile() -> dict:
     """
     Returns the candidate's structured professional profile: identity, work history,
@@ -93,7 +102,6 @@ def get_profile() -> dict:
     return result
 
 
-@mcp.tool()
 def get_availability() -> dict:
     """
     Returns the candidate's current search status, availability timeline, target role
@@ -116,7 +124,6 @@ def get_availability() -> dict:
     return result
 
 
-@mcp.tool()
 def get_fit_signal(
     role_title: str,
     role_description: Optional[str] = None,
@@ -191,7 +198,7 @@ async def homepage(request: Request) -> HTMLResponse:
         name = profile.get("identity", {}).get("name", _DEFAULT_CANDIDATE)
     except Exception:
         name = _DEFAULT_CANDIDATE
-    base = str(request.base_url).rstrip("/")
+    base = _public_base_url(request)
     return HTMLResponse(_render_ui(name, _DEFAULT_CANDIDATE, f"{base}/mcp"))
 
 
@@ -269,25 +276,73 @@ async def logs_api(_request: Request) -> JSONResponse:
 
 # ── App ───────────────────────────────────────────────────────────────────────
 
-@contextlib.asynccontextmanager
-async def lifespan(app: Starlette):
-    async with mcp.session_manager.run():
-        yield
+def create_app() -> Starlette:
+    mcp = FastMCP("Ombud", stateless_http=True, json_response=True)
+    # streamable_http_path defaults to "/mcp" — endpoint is {base}/mcp
+
+    @mcp.tool()
+    def mcp_get_profile() -> dict:
+        return get_profile()
+
+    @mcp.tool()
+    def mcp_get_availability() -> dict:
+        return get_availability()
+
+    @mcp.tool()
+    def mcp_get_fit_signal(
+        role_title: str,
+        role_description: Optional[str] = None,
+        company_name: Optional[str] = None,
+        company_stage: Optional[str] = None,
+        company_size: Optional[int] = None,
+        industry: Optional[str] = None,
+        location: Optional[str] = None,
+        remote_policy: Optional[str] = None,
+        compensation_base_min: Optional[int] = None,
+        compensation_base_max: Optional[int] = None,
+        seniority_level: Optional[str] = None,
+        functional_area: Optional[str] = None,
+        context: Optional[str] = None,
+    ) -> dict:
+        return get_fit_signal(
+            role_title=role_title,
+            role_description=role_description,
+            company_name=company_name,
+            company_stage=company_stage,
+            company_size=company_size,
+            industry=industry,
+            location=location,
+            remote_policy=remote_policy,
+            compensation_base_min=compensation_base_min,
+            compensation_base_max=compensation_base_max,
+            seniority_level=seniority_level,
+            functional_area=functional_area,
+            context=context,
+        )
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: Starlette):
+        async with mcp.session_manager.run():
+            yield
+
+    return Starlette(
+        routes=[
+            Route("/", homepage),
+            Route("/api/login", login_api, methods=["POST"]),
+            Route("/api/logout", logout_api, methods=["POST"]),
+            Route("/api/profile/{candidate_id}", profile_api, methods=["GET", "PUT"]),
+            Route("/api/logs", logs_api),
+            Mount("/", app=mcp.streamable_http_app()),
+        ],
+        lifespan=lifespan,
+    )
 
 
-app = Starlette(
-    routes=[
-        Route("/", homepage),
-        Route("/api/login", login_api, methods=["POST"]),
-        Route("/api/logout", logout_api, methods=["POST"]),
-        Route("/api/profile/{candidate_id}", profile_api, methods=["GET", "PUT"]),
-        Route("/api/logs", logs_api),
-        Mount("/", app=mcp.streamable_http_app()),
-    ],
-    lifespan=lifespan,
-)
+app = create_app()
 
-handler = Mangum(app, lifespan="on")
+
+def handler(event, context):
+    return Mangum(create_app(), lifespan="on")(event, context)
 
 
 # ── UI template ───────────────────────────────────────────────────────────────
@@ -417,7 +472,18 @@ function show(btn) {{
 
 async function load() {{
   const r = await fetch("/api/profile/" + CID);
-  document.getElementById("editor").value = await r.text();
+  const body = await r.text();
+  if (!r.ok) {{
+    const msg = document.getElementById("msg");
+    let error = body;
+    try {{
+      error = JSON.parse(body).error || body;
+    }} catch (_err) {{}}
+    document.getElementById("editor").value = "";
+    msg.textContent = "Load failed: " + error;
+    return;
+  }}
+  document.getElementById("editor").value = body;
 }}
 
 async function save() {{

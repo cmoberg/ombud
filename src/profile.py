@@ -7,7 +7,10 @@ import yaml
 
 PROFILE_BUCKET = os.environ.get("PROFILE_BUCKET")
 PROFILE_KEY_PREFIX = os.environ.get("PROFILE_KEY_PREFIX", "profiles")
-LOCAL_PROFILE_DIR = Path(__file__).parent.parent / "profiles"
+_PROFILE_DIR_CANDIDATES = (
+    Path(__file__).parent / "profiles",
+    Path(__file__).parent.parent / "profiles",
+)
 
 # Module-level client — avoids per-call credential resolution overhead.
 _s3 = None
@@ -39,7 +42,11 @@ def read_raw_profile(candidate_id: str) -> str:
 
 
 def _read_local(candidate_id: str) -> str:
-    return (LOCAL_PROFILE_DIR / f"{candidate_id}.yaml").read_text()
+    for profile_dir in _PROFILE_DIR_CANDIDATES:
+        path = profile_dir / f"{candidate_id}.yaml"
+        if path.exists():
+            return path.read_text()
+    raise FileNotFoundError(candidate_id)
 
 
 def _read_s3(candidate_id: str) -> str:
@@ -61,7 +68,13 @@ def save_raw_profile(candidate_id: str, content: str) -> None:
 
 
 def _save_local(candidate_id: str, content: str) -> None:
-    (LOCAL_PROFILE_DIR / f"{candidate_id}.yaml").write_text(content)
+    existing_path = next(
+        (profile_dir / f"{candidate_id}.yaml" for profile_dir in _PROFILE_DIR_CANDIDATES if (profile_dir / f"{candidate_id}.yaml").exists()),
+        None,
+    )
+    target = existing_path or (_PROFILE_DIR_CANDIDATES[0] / f"{candidate_id}.yaml")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content)
 
 
 def _save_s3(candidate_id: str, content: str) -> None:

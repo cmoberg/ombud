@@ -1,4 +1,5 @@
 from starlette.testclient import TestClient
+from starlette.requests import Request
 
 import log_store
 import server
@@ -41,7 +42,7 @@ def test_profile_api_get_accepts_bearer_token(monkeypatch):
 
     client = TestClient(server.app)
     response = client.get(
-        "/api/profile/cmoberg",
+        "/api/profile/candidate",
         headers={"Authorization": "Bearer user-token"},
     )
 
@@ -89,3 +90,15 @@ def test_get_fit_signal_logs_redacted_company_name(monkeypatch):
     assert result["schema_version"] == "1.0"
     entry = log_store.all_entries()[0]
     assert entry["inputs"] == {"role_title": "CTO", "has_company_name": True}
+
+
+def test_public_base_url_prefers_env_override(monkeypatch):
+    monkeypatch.setattr(server, "_PUBLIC_BASE_URL", "https://ombud.cmoberg.com")
+    request = Request({
+        "type": "http",
+        "scheme": "https",
+        "server": ("ignored.example.com", 443),
+        "headers": [],
+    })
+
+    assert server._public_base_url(request) == "https://ombud.cmoberg.com"

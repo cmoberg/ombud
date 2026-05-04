@@ -52,7 +52,7 @@ The web UI at `http://localhost:8000` requires a token before it will show the e
 
 ### Add your profile
 
-Copy `profiles/cmoberg.yaml` to `profiles/{your-id}.yaml` and edit it. Set `CANDIDATE_ID={your-id}` when running. The profile has six sections:
+Copy `profiles/candidate.yaml` to `profiles/{your-id}.yaml` and edit it. Set `CANDIDATE_ID={your-id}` when running. The profile has six sections:
 
 - `identity` — name, headline, location, links
 - `experience` — work history with team size, P&L, geography scope
@@ -247,7 +247,7 @@ The Function URL is your MCP server address. Configure it as an MCP server in an
 
 | Parameter | Default | Description |
 |---|---|---|
-| `CandidateId` | `cmoberg` | Profile ID — filename without `.yaml` |
+| `CandidateId` | `candidate` | Profile ID — filename without `.yaml` |
 | `AdminToken` | _(required)_ | Bearer token for profile write operations |
 | `ProfileBucket` | _(empty)_ | S3 bucket for live profile updates without redeployment |
 | `ProfileKeyPrefix` | `profiles` | S3 key prefix |
@@ -275,7 +275,7 @@ src/
 └── logger.py        # Structured JSON logging → CloudWatch
 
 profiles/
-└── cmoberg.yaml     # Candidate profile (compensation fields use null placeholders)
+└── candidate.yaml   # Candidate profile (compensation fields use null placeholders)
 
 template.yaml        # AWS SAM deployment
 ```
