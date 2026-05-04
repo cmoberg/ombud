@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  ProfileBucket:
+    Type: String
+    Default: ""
+    Description: "S3 bucket containing profile YAMLs. Leave empty to use bundled profiles."
+  ProfileKeyPrefix:
+    Type: String
+    Default: "profiles"
+    Description: "S3 key prefix for profile YAMLs."
+  CandidateId:
+    Type: String
+    Default: "cmoberg"
+    Description: "Candidate profile ID (filename without .yaml). Set to your own ID when forking."
+  AdminToken:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Bearer token required for profile write operations (PUT /api/profile). Set a strong random value."
+  CorsAllowOrigin:
+    Type: String
+    Default: "*"
+    Description: >
+      CORS allowed origin for the Function URL. Restrict to your deployed domain in production
+      (e.g. https://abc123.lambda-url.eu-north-1.on.aws). MCP clients are not browser-based
+      and are unaffected by CORS; this only matters for browser-initiated requests.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 30
+
+Resources:
+  OmbudFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: server.handler
+      Environment:
+        Variables:
+          PROFILE_BUCKET: !Ref ProfileBucket
+          PROFILE_KEY_PREFIX: !Ref ProfileKeyPrefix
+          CANDIDATE_ID: !Ref CandidateId
+          ADMIN_TOKEN: !Ref AdminToken
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: !Split [",", !Ref CorsAllowOrigin]
+          AllowMethods: ["GET", "POST", "PUT", "OPTIONS"]
+          AllowHeaders: ["*"]
+          MaxAge: 86400
+      Policies:
+        - !If
+          - HasProfileBucket
+          - Statement:
+              - Effect: Allow
+                Action: ["s3:GetObject", "s3:PutObject"]
+                Resource: !Sub "arn:aws:s3:::${ProfileBucket}/${ProfileKeyPrefix}/*"
+          - !Ref AWS::NoValue
+
+Conditions:
+  HasProfileBucket: !Not [!Equals [!Ref ProfileBucket, ""]]
+
+Outputs:
+  FunctionUrl:
+    Description: "MCP server endpoint — use this as your MCP server URL (append /mcp)"
+    Value: !GetAtt OmbudFunctionUrl.FunctionUrl
+  UIUrl:
+    Description: "Candidate web UI"
+    Value: !GetAtt OmbudFunctionUrl.FunctionUrl

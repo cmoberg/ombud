@@ -1,0 +1,264 @@
+schema_version: "1.0"
+candidate_id: "cmoberg"
+profile_version: "2026-05-04"
+updated_at: "2026-05-04T00:00:00Z"
+completeness_score: 0.90
+
+# ── IDENTITY ────────────────────────────────────────────────
+identity:
+  name: "Carl Moberg"
+  headline: "Co-founder & CTO · Edge Infrastructure · $175M Exit · Agentic AI"
+  summary: |
+    Technology executive with 25 years at the intersection of infrastructure
+    automation and AI deployment. Co-founded Avassa Systems (edge AI infrastructure)
+    and Tail-f Systems (acquired by Cisco for $175M). Drove $100M+ revenue products
+    at Cisco as Senior Director of Product Management. Deep expertise in distributed
+    systems, developer ecosystems, edge computing, and agentic AI. Active in
+    standards bodies (Linux Foundation Margo, IETF YANG Doctors, European Commission).
+    I built Ombud as my own job search tool — this server is the productisation of
+    that experience.
+  location:
+    city: "Stockholm"
+    country: "SE"
+    timezone: "Europe/Stockholm"
+  links:
+    linkedin: "https://linkedin.com/in/cmoberg"
+    website: "https://cmoberg.com"
+    github: null
+
+# ── EXPERIENCE ──────────────────────────────────────────────
+experience:
+  - company: "Avassa Systems"
+    title: "Co-founder & CTO"
+    start_date: "2020-03"
+    end_date: "2026-04"
+    current: false
+    industry: "Infrastructure Software"
+    company_stage: "series_b"
+    company_size_at_departure: 35
+    scope:
+      team_size: 35
+      direct_reports: 8
+      p_and_l_usd: null
+      geography: "global"
+    highlights:
+      - "Co-founded venture-backed company; architected cloud-native edge control plane for deployment of containerised apps and AI/ML inference across thousands of edge locations via single API."
+      - "Secured Gartner Cool Vendor (Edge Computing 2022), Intellyx Digital Innovation Award (Winter 2024), QKS Group SPARK Matrix (2025)."
+      - "Pioneered MCP-based AI agent orchestration for edge operations management."
+      - "Keynoted embedded world Nuremberg 2026; presented at Hannover Messe, SPS, and Edge Computing World."
+
+  - company: "Cisco"
+    title: "Senior Director of Product Management"
+    start_date: "2014-08"
+    end_date: "2020-03"
+    current: false
+    industry: "Networking / Enterprise Software"
+    company_stage: "enterprise"
+    company_size_at_departure: 80000
+    scope:
+      team_size: 15
+      direct_reports: 5
+      p_and_l_usd: 100000000
+      geography: "global"
+    highlights:
+      - "Joined via Tail-f acquisition; led product management for Network Services Orchestrator (NSO) serving 150+ enterprise and service provider customers generating $100M+ annual revenue."
+      - "Drove product strategy and GTM across global service provider base during SDN/NFV industry transition."
+      - "Built product management and developer community teams with partner and ISV ecosystem programs."
+      - "IETF YANG Doctors Expert Reviewer (2017–2021); co-authored RFC 8199 (YANG Module Classification)."
+
+  - company: "Tail-f Systems"
+    title: "Co-founder · VP Technology & North America CTO"
+    start_date: "2006-06"
+    end_date: "2014-08"
+    current: false
+    industry: "Network Software"
+    company_stage: "growth"
+    company_size_at_departure: 60
+    scope:
+      team_size: 60
+      direct_reports: 10
+      p_and_l_usd: null
+      geography: "global"
+    highlights:
+      - "Employee #3; progressed through VP Engineering, COO, and VP Technology / North America CTO as company grew from founding to $175M Cisco acquisition."
+      - "Built the ConfD product, pioneering YANG-based network configuration management; led global ConfD and NCS commercialisation."
+      - "Relocated to Silicon Valley 2013 to establish US operations and drive strategic partnerships preceding acquisition."
+      - "US Patent US10462010B2; CableLabs and Metro Ethernet Forum contributor."
+
+  - company: "ServiceFactory AB"
+    title: "Co-founder & Director"
+    start_date: "1999-11"
+    end_date: "2006-05"
+    current: false
+    industry: "Internet Infrastructure"
+    company_stage: "growth"
+    company_size_at_departure: null
+    scope:
+      team_size: null
+      direct_reports: null
+      p_and_l_usd: null
+      geography: "regional"
+    highlights:
+      - "Co-founded developer of customer service and provisioning platforms for internet service providers."
+      - "Designed core platform architecture; transitioned to Director overseeing product lifecycle, roadmap, and go-to-market."
+
+  - company: "Telia AB"
+    title: "Senior Network Architect / Network Operations Engineer"
+    start_date: "1997-01"
+    end_date: "1999-11"
+    current: false
+    industry: "Telecommunications"
+    company_stage: "enterprise"
+    company_size_at_departure: null
+    scope:
+      team_size: null
+      direct_reports: null
+      p_and_l_usd: null
+      geography: "national"
+    highlights:
+      - "Principal architect of Telia's second-generation internet services platform supporting millions of subscribers."
+      - "Maintained European and North American IP transport network architecture; participated in IETF and RIPE."
+
+# ── EDUCATION ───────────────────────────────────────────────
+education:
+  - institution: "KTH Royal Institute of Technology"
+    degree: null
+    field_of_study: "Electrical Engineering"
+    start_date: "1993"
+    end_date: "1995"
+    notes: "Left to join Telia's internet operations team; no degree conferred."
+
+# ── SKILLS ──────────────────────────────────────────────────
+skills:
+  - label: "Distributed Systems"
+    esco_uri: null
+    proficiency: "expert"
+    years: 25
+    basis: "stated"
+
+  - label: "Edge Computing"
+    esco_uri: null
+    proficiency: "expert"
+    years: 8
+    basis: "stated"
+
+  - label: "Network Automation (YANG, NETCONF, OpenConfig)"
+    esco_uri: null
+    proficiency: "expert"
+    years: 18
+    basis: "stated"
+
+  - label: "AI/ML Infrastructure"
+    esco_uri: null
+    proficiency: "advanced"
+    years: 4
+    basis: "stated"
+
+  - label: "Agentic AI / MCP"
+    esco_uri: null
+    proficiency: "advanced"
+    years: 2
+    basis: "stated"
+
+  - label: "Platform Strategy"
+    esco_uri: null
+    proficiency: "expert"
+    years: 15
+    basis: "stated"
+
+  - label: "Developer Ecosystems"
+    esco_uri: null
+    proficiency: "expert"
+    years: 15
+    basis: "stated"
+
+  - label: "Product Leadership"
+    esco_uri: null
+    proficiency: "expert"
+    years: 15
+    basis: "stated"
+
+  - label: "Cloud-Native / Containers"
+    esco_uri: null
+    proficiency: "advanced"
+    years: 8
+    basis: "stated"
+
+  - label: "Enterprise Go-to-Market"
+    esco_uri: null
+    proficiency: "expert"
+    years: 15
+    basis: "stated"
+
+# ── SEARCH PREFERENCES ──────────────────────────────────────
+search:
+  status: "active_search"
+  available_from: "2026-05-01"
+  notice_period: null
+
+  target:
+    roles:
+      - "CEO"
+      - "CTO"
+      - "VP Engineering"
+      - "Co-founder"
+    seniority:
+      - "c_suite"
+      - "vp"
+    functional_areas:
+      - "engineering"
+      - "product"
+    industries:
+      - "infrastructure_software"
+      - "developer_tools"
+      - "agentic_ai"
+      - "network_software"
+    company_stages:
+      - "series_a"
+      - "series_b"
+      - "series_c"
+      - "growth"
+    company_size_range: [10, 300]
+
+  geography:
+    preferred_locations:
+      - "Stockholm, Sweden"
+      - "San Francisco, CA"
+      - "Remote"
+    remote_policy: "hybrid"
+    willing_to_relocate: true
+    relocation_excluded: []
+
+  compensation:
+    base_minimum_usd: null   # Set in profiles/cmoberg.private.yaml — do not commit
+    equity_required: true
+    notes: "Equity is a requirement. Open to below-market base for meaningful founder-level equity."
+
+# ── CULTURE & MOTIVATORS ────────────────────────────────────
+culture:
+  values:
+    - "technical depth in leadership"
+    - "direct, low-context communication"
+    - "shipping over planning"
+    - "founder mentality at any org size"
+  motivators:
+    - "hard infrastructure and systems problems"
+    - "early-stage company building"
+    - "developer-facing and operator-facing products"
+    - "agentic AI applications with real technical depth"
+  leadership_style: |
+    I lead from technical depth. I am most effective in environments where the
+    technical leader needs to be credible in the room with engineers and customers
+    alike. I build small, high-trust teams and have little patience for process
+    overhead that doesn't produce output. I default to direct communication and
+    expect the same.
+  deal_breakers:
+    - "pure people-management role with no technical involvement or ownership"
+    - "large enterprise with no realistic path to product influence"
+    - "role where the technical leader is downstream of a non-technical CEO with no engineering respect"
+
+# ── CONSENT & VISIBILITY ────────────────────────────────────
+consent:
+  employer_visible: true
+  withheld_fields:
+    - "search.compensation"
