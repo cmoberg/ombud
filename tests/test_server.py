@@ -32,7 +32,7 @@ def test_homepage_requires_auth(monkeypatch):
     response = client.get("/")
 
     assert response.status_code == 401
-    assert "Enter the access token" in response.text
+    assert "Enter access token" in response.text
 
 
 def test_profile_api_get_accepts_bearer_token(monkeypatch):
@@ -102,3 +102,17 @@ def test_public_base_url_prefers_env_override(monkeypatch):
     })
 
     assert server._public_base_url(request) == "https://ombud.cmoberg.com"
+
+
+def test_mcp_endpoint_does_not_reject_non_local_host_header():
+    with TestClient(server.app) as client:
+        response = client.post(
+            "/mcp",
+            headers={
+                "host": "ombud.cmoberg.com",
+                "content-type": "application/json",
+            },
+            content="{}",
+        )
+
+    assert response.status_code != 421

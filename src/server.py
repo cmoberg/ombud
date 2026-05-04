@@ -7,6 +7,7 @@ from typing import Optional
 import yaml
 from mangum import Mangum
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -277,7 +278,15 @@ async def logs_api(_request: Request) -> JSONResponse:
 # ── App ───────────────────────────────────────────────────────────────────────
 
 def create_app() -> Starlette:
-    mcp = FastMCP("Ombud", stateless_http=True, json_response=True)
+    # This app mounts FastMCP inside Starlette and serves it through Lambda/CloudFront.
+    # FastMCP's default localhost transport security is correct for local dev servers,
+    # but rejects real Host headers in this deployment shape.
+    mcp = FastMCP(
+        "Ombud",
+        stateless_http=True,
+        json_response=True,
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
     # streamable_http_path defaults to "/mcp" — endpoint is {base}/mcp
 
     @mcp.tool()
@@ -356,108 +365,408 @@ def _render_ui(name: str, candidate_id: str, mcp_url: str) -> str:
 <title>Ombud — {name}</title>
 <style>
 :root {{
-  --bg:#0f0f0f; --surface:#1a1a1a; --border:#272727;
-  --text:#e0e0e0; --muted:#555; --accent:#4ade80;
-  --warn:#fbbf24; --danger:#f87171;
-  --mono:"JetBrains Mono","Fira Code","Cascadia Code",monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --paper:#fcfbf7;
+  --panel:#f5efe4;
+  --line:#e9dfcf;
+  --line-strong:#d8cab2;
+  --ink:#181511;
+  --muted:#6c655d;
+  --link:#0b46ff;
+  --danger:#c3312f;
+  --success:#326b2c;
+  --mono:"JetBrains Mono","IBM Plex Mono","SFMono-Regular",monospace;
+  --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:var(--bg);color:var(--text);font-family:var(--sans)}}
-header{{
-  padding:18px 28px;border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
+body{{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  min-height:100vh;
 }}
-header h1{{font-size:.75rem;font-weight:700;letter-spacing:.12em;color:var(--accent)}}
-header code{{font-family:var(--mono);font-size:.75rem;color:var(--muted)}}
-nav{{display:flex;border-bottom:1px solid var(--border);padding:0 28px}}
-nav button{{
-  padding:10px 18px;font-size:.8125rem;cursor:pointer;
-  color:var(--muted);background:none;border:none;
-  border-bottom:2px solid transparent;font-family:var(--sans);
+a{{color:var(--link);text-decoration:none}}
+a:hover{{text-decoration:underline}}
+.site-header{{
+  border-bottom:1px solid var(--line);
+  background:rgba(252,251,247,.92);
+  backdrop-filter:blur(10px);
 }}
-nav button.active{{color:var(--text);border-bottom-color:var(--accent)}}
-.pane{{display:none;padding:28px}}.pane.active{{display:block}}
-.editor-wrap{{max-width:840px}}
+.header-inner{{
+  width:min(860px,calc(100% - 32px));
+  margin:0 auto;
+  min-height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}}
+.brand{{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:.95rem;
+  font-weight:500;
+}}
+.mark{{
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid var(--line-strong);
+  background:radial-gradient(circle at 30% 30%, #f8f3ea 0, #d7c7ac 45%, #9b8d76 100%);
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
+}}
+.top-link{{
+  font-size:.75rem;
+  color:var(--muted);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}}
+.page{{
+  width:min(860px,calc(100% - 32px));
+  margin:18px auto 48px;
+}}
+.tabs{{
+  margin:0 0 0 120px;
+  display:flex;
+  gap:18px;
+}}
+.tabs button{{
+  border:none;
+  background:none;
+  padding:0 0 12px;
+  color:var(--muted);
+  font:inherit;
+  font-size:.78rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+}}
+.tabs button.active{{
+  color:var(--ink);
+  text-decoration:underline;
+  text-decoration-color:var(--line-strong);
+  text-underline-offset:6px;
+}}
+.pane{{display:none}}
+.pane.active{{display:block}}
+.editor-wrap,.log-wrap{{
+  margin-left:120px;
+  max-width:600px;
+}}
+.mcp-wrap{{
+  margin-left:120px;
+  max-width:600px;
+  padding-top:22px;
+}}
+.editor-meta{{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:flex-end;
+  padding:22px 0 10px;
+  border-bottom:1px solid var(--line);
+}}
+.editor-meta h2,.log-head h2{{
+  font-size:1.65rem;
+  font-weight:500;
+  line-height:1.1;
+}}
+.editor-meta p,.log-head p{{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:.9rem;
+  line-height:1.5;
+}}
+.meta-code{{
+  color:var(--muted);
+  font-size:.7rem;
+  line-height:1.5;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}}
 textarea{{
-  width:100%;height:640px;background:var(--surface);border:1px solid var(--border);
-  border-radius:6px;padding:16px;color:var(--text);
-  font-family:var(--mono);font-size:.8rem;line-height:1.65;
-  resize:vertical;outline:none;
+  width:100%;
+  height:640px;
+  margin-top:20px;
+  background:#fff;
+  border:1px solid var(--line);
+  padding:18px 20px;
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:.8rem;
+  line-height:1.72;
+  resize:vertical;
+  outline:none;
+  box-shadow:0 1px 0 rgba(255,255,255,.9) inset;
 }}
-textarea:focus{{border-color:#3a3a3a}}
+textarea:focus{{border-color:var(--line-strong)}}
 input[type=password]{{
-  background:var(--surface);border:1px solid var(--border);border-radius:4px;
-  padding:6px 10px;color:var(--text);font-family:var(--mono);font-size:.8rem;
-  outline:none;width:220px;
+  width:220px;
+  background:#fff;
+  border:1px solid var(--line);
+  padding:10px 12px;
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:.78rem;
+  outline:none;
 }}
-input[type=password]:focus{{border-color:#3a3a3a}}
-input[type=password]::placeholder{{color:var(--muted)}}
-.bar{{display:flex;align-items:center;gap:14px;margin-top:14px}}
+input[type=password]:focus{{border-color:var(--line-strong)}}
+input[type=password]::placeholder{{color:#9b938a}}
+.bar{{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:12px;
+  margin-top:14px;
+}}
 .btn{{
-  padding:7px 18px;border-radius:4px;font-size:.8125rem;cursor:pointer;
-  font-family:var(--sans);border:none;background:var(--accent);
-  color:#000;font-weight:600;
+  padding:9px 16px;
+  border:1px solid var(--line-strong);
+  background:transparent;
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:.78rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
 }}
-.btn:hover{{opacity:.88}}
-.msg{{font-size:.8rem;color:var(--muted)}}
-.log-bar{{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}}
-.log-bar span{{font-size:.75rem;color:var(--muted)}}
+.btn:hover{{background:#f7f2e8}}
+.btn-link{{border-color:transparent;color:var(--muted)}}
+.msg{{font-size:.82rem;color:var(--muted);min-height:1.2rem}}
+.msg.error{{color:var(--danger)}}
+.msg.success{{color:var(--success)}}
+.log-wrap{{padding-top:22px}}
+.mcp-head{{
+  padding-bottom:12px;
+  border-bottom:1px solid var(--line);
+}}
+.mcp-head h2{{
+  font-size:1.65rem;
+  font-weight:500;
+  line-height:1.1;
+}}
+.mcp-head p{{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:.9rem;
+  line-height:1.5;
+}}
+.mcp-card{{
+  margin-top:14px;
+  padding:18px 20px;
+  border:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(246,239,227,.8), rgba(242,233,218,.95));
+}}
+.mcp-card + .mcp-card{{margin-top:12px}}
+.mcp-card h3{{
+  font-size:.78rem;
+  font-weight:600;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:10px;
+}}
+.mcp-card p,.mcp-card li{{
+  font-size:.9rem;
+  line-height:1.6;
+}}
+.mcp-card ul{{
+  padding-left:18px;
+}}
+.mcp-card code,.meta-code code{{
+  font-family:var(--mono);
+  font-size:.78rem;
+}}
+.endpoint-box{{
+  display:block;
+  width:100%;
+  padding:12px 14px;
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--ink);
+  overflow:auto;
+}}
+pre.endpoint-box{{
+  white-space:pre-wrap;
+  word-break:break-word;
+}}
+.log-head{{
+  padding-bottom:12px;
+  border-bottom:1px solid var(--line);
+}}
+.log-status{{
+  margin-top:8px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+  font-size:.72rem;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}}
 .dot{{
-  display:inline-block;width:6px;height:6px;background:var(--accent);
-  border-radius:50%;animation:blink 2.4s ease-in-out infinite;margin-right:6px;
+  display:inline-block;
+  width:7px;
+  height:7px;
+  background:var(--success);
+  border-radius:999px;
+  animation:blink 2.4s ease-in-out infinite;
 }}
 @keyframes blink{{0%,100%{{opacity:1}}50%{{opacity:.2}}}}
-table{{width:100%;border-collapse:collapse;font-size:.8rem}}
+table{{
+  width:100%;
+  margin-top:14px;
+  border-collapse:collapse;
+  font-size:.8rem;
+}}
 th{{
-  text-align:left;padding:7px 12px;color:var(--muted);font-weight:500;
-  font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;
-  border-bottom:1px solid var(--border);
+  text-align:left;
+  padding:8px 0;
+  color:var(--muted);
+  font-weight:500;
+  font-size:.68rem;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  border-bottom:1px solid var(--line);
 }}
-td{{padding:9px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);vertical-align:middle}}
-tr:hover td{{background:var(--surface)}}
+td{{
+  padding:14px 0;
+  border-bottom:1px solid var(--line);
+  font-family:var(--mono);
+  vertical-align:middle;
+}}
 .badge{{
-  display:inline-block;padding:2px 8px;border-radius:3px;
-  background:var(--surface);border:1px solid var(--border);
-  font-size:.7rem;font-family:var(--mono);
+  display:inline-block;
+  padding:2px 7px;
+  border:1px solid var(--line);
+  font-size:.68rem;
+  background:#fff;
 }}
-.strong{{color:var(--accent)}}.likely{{color:#86efac}}
-.possible{{color:var(--warn)}}.poor{{color:var(--danger)}}
-.empty{{color:var(--muted);text-align:center;padding:52px;font-size:.8rem}}
+.strong,.likely,.possible{{color:var(--link)}}
+.poor{{color:var(--danger)}}
+.empty{{color:var(--muted);text-align:center;padding:52px 0;font-size:.84rem}}
+footer{{
+  margin-top:72px;
+  border-top:1px solid var(--line);
+}}
+.footer-inner{{
+  width:min(860px,calc(100% - 32px));
+  margin:0 auto;
+  padding:18px 0 28px;
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  color:var(--muted);
+  font-size:.72rem;
+}}
+@media (max-width: 760px) {{
+  .tabs,.editor-wrap,.log-wrap,.mcp-wrap{{margin-left:0;max-width:none}}
+  .header-inner,.footer-inner{{width:min(100% - 24px, 680px)}}
+  .page{{width:min(100% - 24px, 680px);margin-top:12px}}
+  .editor-meta{{display:block}}
+  textarea{{height:520px}}
+  input[type=password]{{width:100%}}
+}}
 </style>
 </head>
 <body>
-<header>
-  <h1>OMBUD</h1>
-  <code>MCP → {mcp_url}</code>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand"><span class="mark"></span><span>{name}</span></div>
+    <a class="top-link" href="#" onclick="logout(); return false;">Sign out</a>
+  </div>
 </header>
-<nav>
-  <button class="active" data-tab="profile" onclick="show(this)">Profile</button>
-  <button data-tab="log" onclick="show(this)">Request Log</button>
-</nav>
 
-<div id="profile" class="pane active">
-  <div class="editor-wrap">
-    <textarea id="editor" spellcheck="false"></textarea>
-    <div class="bar">
-      <button class="btn" onclick="save()">Save</button>
-      <input type="password" id="token" placeholder="Admin token" autocomplete="current-password">
-      <span class="msg" id="msg"></span>
+<main class="page">
+  <nav class="tabs">
+    <button class="active" data-tab="profile" onclick="show(this)">Profile</button>
+    <button data-tab="mcp" onclick="show(this)">MCP Endpoint</button>
+    <button data-tab="log" onclick="show(this)">Request Log</button>
+  </nav>
+
+  <section id="profile" class="pane active">
+    <div class="editor-wrap">
+      <div class="editor-meta">
+        <div>
+          <h2>Candidate profile</h2>
+          <p>Edit the source YAML directly. The MCP tools and fit engine read from this profile.</p>
+        </div>
+        <div class="meta-code">Source:<br>{candidate_id}.yaml</div>
+      </div>
+      <textarea id="editor" spellcheck="false"></textarea>
+      <div class="bar">
+        <button class="btn" onclick="save()">Save</button>
+        <input type="password" id="token" placeholder="Admin token" autocomplete="current-password">
+        <button class="btn btn-link" onclick="logout()">Sign out</button>
+        <span class="msg" id="msg"></span>
+      </div>
     </div>
-  </div>
-</div>
+  </section>
 
-<div id="log" class="pane">
-  <div class="log-bar">
-    <span><span class="dot"></span>live · refreshes every 5s</span>
+  <section id="mcp" class="pane">
+    <div class="mcp-wrap">
+      <div class="mcp-head">
+        <h2>MCP endpoint</h2>
+        <p>Use this endpoint from an MCP-compatible client to inspect the profile, read availability, and request fit signals.</p>
+      </div>
+      <div class="mcp-card">
+        <h3>Endpoint URL</h3>
+        <code class="endpoint-box">{mcp_url}</code>
+      </div>
+      <div class="mcp-card">
+        <h3>How to connect</h3>
+        <ul>
+          <li>Configure your MCP client to use the Streamable HTTP transport.</li>
+          <li>Point it at <code>{mcp_url}</code>.</li>
+          <li>No browser login is required for MCP tool calls.</li>
+        </ul>
+      </div>
+      <div class="mcp-card">
+        <h3>Local .mcp.json example</h3>
+        <p>Keep this file local to your machine. It is intended as client configuration, not repository state.</p>
+        <pre class="endpoint-box">{{
+  "mcpServers": {{
+    "ombud": {{
+      "type": "http",
+      "url": "{mcp_url}"
+    }}
+  }}
+}}</pre>
+      </div>
+      <div class="mcp-card">
+        <h3>Available tools</h3>
+        <ul>
+          <li><code>get_profile</code> for identity, experience, education, and skills</li>
+          <li><code>get_availability</code> for search status, timing, target roles, and geography</li>
+          <li><code>get_fit_signal</code> for deterministic role-fit evaluation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="log" class="pane">
+    <div class="log-wrap">
+      <div class="log-head">
+        <h2>Request log</h2>
+        <p>Recent MCP traffic captured in-memory for this running instance.</p>
+        <div class="log-status"><span class="dot"></span><span>Live refresh every 5 seconds</span></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Tool</th><th>Input</th><th>Outcome</th><th>ms</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div>Ombud</div>
+    <div><a href="{mcp_url}">{mcp_url}</a></div>
   </div>
-  <table>
-    <thead>
-      <tr><th>Time</th><th>Tool</th><th>Input</th><th>Outcome</th><th>ms</th></tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</div>
+</footer>
 
 <script>
 const CID = {repr(candidate_id)};
@@ -490,6 +799,7 @@ async function save() {{
   const msg = document.getElementById("msg");
   const token = document.getElementById("token").value;
   sessionStorage.setItem("ombud_token", token);
+  msg.className = "msg";
   msg.textContent = "Saving…";
   try {{
     const r = await fetch("/api/profile/" + CID, {{
@@ -499,10 +809,18 @@ async function save() {{
     }});
     const j = await r.json();
     msg.textContent = r.ok ? "Saved." : "Error: " + j.error;
+    msg.className = r.ok ? "msg success" : "msg error";
   }} catch(e) {{
     msg.textContent = "Error: " + e.message;
+    msg.className = "msg error";
   }}
   setTimeout(() => msg.textContent = "", 3000);
+}}
+
+async function logout() {{
+  await fetch("/api/logout", {{method: "POST"}});
+  sessionStorage.removeItem("ombud_token");
+  window.location.reload();
 }}
 
 function ago(ts) {{
@@ -566,42 +884,107 @@ def _render_login_ui() -> str:
 <title>Ombud Login</title>
 <style>
 :root {
-  --bg:#0f0f0f; --surface:#1a1a1a; --border:#272727;
-  --text:#e0e0e0; --muted:#777; --accent:#4ade80; --danger:#f87171;
-  --mono:"JetBrains Mono","Fira Code","Cascadia Code",monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --paper:#fcfbf7;
+  --panel:#f5efe4;
+  --line:#e9dfcf;
+  --line-strong:#d8cab2;
+  --ink:#181511;
+  --muted:#6c655d;
+  --link:#0b46ff;
+  --danger:#c3312f;
+  --mono:"JetBrains Mono","IBM Plex Mono","SFMono-Regular",monospace;
+  --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
-  min-height:100vh;display:grid;place-items:center;background:var(--bg);
-  color:var(--text);font-family:var(--sans);padding:24px;
+  min-height:100vh;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--sans);
+  padding:24px;
+}
+.shell{
+  width:min(860px,100%);
+  margin:0 auto;
+}
+.site-header{
+  min-height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid var(--line);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:.95rem;
+  font-weight:500;
+}
+.mark{
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  border:1px solid var(--line-strong);
+  background:radial-gradient(circle at 30% 30%, #f8f3ea 0, #d7c7ac 45%, #9b8d76 100%);
 }
 .card{
-  width:min(420px,100%);background:var(--surface);border:1px solid var(--border);
-  border-radius:10px;padding:24px;
+  width:min(600px,100%);
+  margin:18px 0 0 120px;
+  padding:18px 20px;
+  background:linear-gradient(180deg, rgba(246,239,227,.8), rgba(242,233,218,.95));
+  border:1px solid var(--line);
 }
-h1{font-size:.85rem;letter-spacing:.12em;color:var(--accent);margin-bottom:14px}
-p{font-size:.9rem;line-height:1.5;color:var(--muted);margin-bottom:18px}
+h1{
+  font-size:1.65rem;
+  font-weight:500;
+  margin-bottom:8px;
+}
+p{font-size:.95rem;line-height:1.5;color:var(--muted);margin-bottom:18px}
 input{
-  width:100%;background:#111;border:1px solid var(--border);border-radius:6px;
-  padding:12px 14px;color:var(--text);font-family:var(--mono);font-size:.85rem;outline:none;
+  width:100%;
+  background:#fff;
+  border:1px solid var(--line);
+  padding:12px 14px;
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:.85rem;
+  outline:none;
 }
-input:focus{border-color:#3a3a3a}
+input:focus{border-color:var(--line-strong)}
 button{
-  margin-top:12px;width:100%;padding:10px 14px;border:none;border-radius:6px;
-  background:var(--accent);color:#000;font-weight:700;cursor:pointer;
+  margin-top:12px;
+  padding:9px 16px;
+  border:1px solid var(--line-strong);
+  background:transparent;
+  color:var(--ink);
+  font-size:.78rem;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
 }
 .msg{min-height:1.2rem;font-size:.82rem;margin-top:12px;color:var(--muted)}
 .msg.error{color:var(--danger)}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+@media (max-width: 760px) {
+  .card{margin-left:0}
+}
 </style>
 </head>
 <body>
-  <div class="card">
-    <h1>OMBUD</h1>
-    <p>Enter the access token to view and edit the profile.</p>
-    <input type="password" id="token" placeholder="Access token" autocomplete="current-password">
-    <button onclick="login()">Continue</button>
-    <div class="msg" id="msg"></div>
+  <div class="shell">
+    <div class="site-header">
+      <div class="brand"><span class="mark"></span><span>Ombud</span></div>
+      <div style="font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;">Login</div>
+    </div>
+    <div class="card">
+      <h1>Enter access token</h1>
+      <p>This editor is protected. Use the token configured for the deployed profile to review and update the candidate YAML.</p>
+      <input type="password" id="token" placeholder="Access token" autocomplete="current-password">
+      <button onclick="login()">Continue</button>
+      <div class="msg" id="msg"></div>
+    </div>
   </div>
 <script>
 async function login() {

@@ -1,4 +1,4 @@
-.PHONY: dev install deploy freeze
+.PHONY: dev install deploy deploy-guided freeze
 
 install:
 	uv sync
@@ -16,4 +16,7 @@ freeze:
 	uv export --no-dev --no-hashes -o src/requirements.txt
 
 deploy:
+	sam build && sam deploy
+
+deploy-guided:
 	sam build && sam deploy --guided

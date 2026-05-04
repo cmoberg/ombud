@@ -2,13 +2,16 @@
 
 ## Overview
 
-Ombud is a stateless MCP server deployed to AWS Lambda. Employer agents connect over the Model Context Protocol's streamable HTTP transport and call three tools to evaluate a candidate. All fit scoring is deterministic and rule-based — no external API calls.
+Ombud is a stateless MCP server deployed to AWS Lambda. Employer agents
+connect over the Model Context Protocol's streamable HTTP transport and call
+three tools to evaluate a candidate. All fit scoring is deterministic and
+rule-based with no external API calls.
 
 ---
 
 ## Component map
 
-```
+```text
 Employer agent
   │  MCP / Streamable HTTP
   │  POST {FunctionUrl}/mcp
@@ -37,13 +40,21 @@ Structured logs → CloudWatch Logs
 ## Data flow
 
 ### `get_profile`
-Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_fields`, and returns `identity`, `experience`, `education`, and `skills`.
+
+Loads the candidate YAML, checks `consent.employer_visible`, applies
+`withheld_fields`, and returns `identity`, `experience`, `education`, and
+`skills`.
 
 ### `get_availability`
-Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_fields`, and returns `search.status`, `available_from`, `notice_period`, `target`, and `geography`. Compensation is excluded from this tool's scope regardless of consent settings.
+
+Loads the candidate YAML, checks `consent.employer_visible`, applies
+`withheld_fields`, and returns `search.status`, `available_from`,
+`notice_period`, `target`, and `geography`. Compensation is excluded from
+this tool's scope regardless of consent settings.
 
 ### `get_fit_signal`
-```
+
+```text
 1. Load profile
 2. Check consent.employer_visible — return error if false
 3. apply_withheld(profile) — strip consent.withheld_fields (e.g. search.compensation)
@@ -56,10 +67,11 @@ Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_f
 
 ## Fit engine
 
-`fit_engine.py` is a pure Python module with no external dependencies. It evaluates seven dimensions and combines them into an overall signal:
+`fit_engine.py` is a pure Python module with no external dependencies. It
+evaluates seven dimensions and combines them into an overall signal:
 
 | Dimension | Method |
-|---|---|
+| --- | --- |
 | Skills | Keyword match of skill labels against role text |
 | Experience | Scope metadata from most recent role (team size, geography, P&L) |
 | Seniority | Hierarchy comparison (ic → manager → director → vp → svp → c_suite → board) |
@@ -68,7 +80,9 @@ Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_f
 | Interest | Compares role against candidate's target roles, stages, size range, industry |
 | Constraints | Location exclusions + remote policy conflicts |
 
-Overall signal = fit score × 0.6 + interest score × 0.4, with a readiness modifier. Hard constraint violations short-circuit to `poor` regardless of other scores.
+Overall signal = fit score × 0.6 + interest score × 0.4, with a readiness
+modifier. Hard constraint violations short-circuit to `poor` regardless of
+other scores.
 
 Output signals: `strong` | `likely` | `possible` | `poor`
 
@@ -79,11 +93,12 @@ Output signals: `strong` | `likely` | `possible` | `poor`
 One YAML file per candidate, resolved as `profiles/{candidate_id}.yaml`.
 
 | Mode | Condition | Read | Write |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Local | `PROFILE_BUCKET` unset | filesystem | filesystem |
 | S3 | `PROFILE_BUCKET` set | `s3:GetObject` | `s3:PutObject` |
 
-The S3 client is instantiated once at module load (not per request). The IAM policy scopes access to `{bucket}/{prefix}/*` only.
+The S3 client is instantiated once at module load, not per request. The IAM
+policy scopes access to `{bucket}/{prefix}/*` only.
 
 ---
 
@@ -91,9 +106,14 @@ The S3 client is instantiated once at module load (not per request). The IAM pol
 
 Two controls in `consent`:
 
-**`employer_visible: bool`** — Master switch. If false, all three MCP tools return an error. Used to pause visibility without deleting the profile.
+**`employer_visible: bool`** — Master switch. If false, all three MCP tools
+return an error. Used to pause visibility without deleting the profile.
 
-**`withheld_fields: [string]`** — Dot-notation paths stripped before data leaves the server. Applied by `apply_withheld()` in `profile.py`. Default: `["search.compensation"]`. Compensation constraint violations still surface in `get_fit_signal` output as plain language — the specific figures are never exposed.
+**`withheld_fields: [string]`** — Dot-notation paths stripped before data
+leaves the server. Applied by `apply_withheld()` in `profile.py`. Default:
+`["search.compensation"]`. Compensation constraint violations still surface
+in `get_fit_signal` output as plain language, and the specific figures are
+never exposed.
 
 ---
 
@@ -101,9 +121,14 @@ Two controls in `consent`:
 
 MCP tools (employer-facing) are unauthenticated — public read access is intentional.
 
-The browser-facing routes use a simple token gate. `POST /api/login` accepts either `USER_TOKEN` or `ADMIN_TOKEN` and sets an HTTP-only cookie. If `USER_TOKEN` is unset, it falls back to `ADMIN_TOKEN`.
+The browser-facing routes use a simple token gate. `POST /api/login` accepts
+either `USER_TOKEN` or `ADMIN_TOKEN` and sets an HTTP-only cookie. If
+`USER_TOKEN` is unset, it falls back to `ADMIN_TOKEN`.
 
-The profile read/write endpoints (`GET/PUT /api/profile/{id}`) and `/api/logs` also accept `Authorization: Bearer <token>` directly. In the SAM deployment, `ADMIN_TOKEN` is the configured token; an empty or missing token leaves the UI/API effectively open unless you set one.
+The profile read/write endpoints (`GET/PUT /api/profile/{id}`) and
+`/api/logs` also accept `Authorization: Bearer <token>` directly. In the SAM
+deployment, `ADMIN_TOKEN` is the configured token; an empty or missing token
+leaves the UI/API effectively open unless you set one.
 
 ---
 
@@ -112,7 +137,7 @@ The profile read/write endpoints (`GET/PUT /api/profile/{id}`) and `/api/logs` a
 AWS SAM (`template.yaml`). Key parameters:
 
 | Parameter | Purpose |
-|---|---|
+| --- | --- |
 | `CandidateId` | Profile ID — matches `profiles/{id}.yaml` |
 | `AdminToken` | Bearer token for profile write operations |
 | `ProfileBucket` | S3 bucket for live updates without redeployment |
@@ -121,10 +146,21 @@ AWS SAM (`template.yaml`). Key parameters:
 
 Lambda runtime: Python 3.12, arm64, 512 MB, 30s timeout.
 
+If you front the Function URL with CloudFront, the `/mcp*` behavior must
+allow and forward `POST` requests, preserve the client's `Accept` header,
+use the Lambda Function URL as an `HTTPS only` origin, avoid caching MCP
+traffic, and avoid WAF or edge rules that block JSON-RPC-style requests.
+`PUBLIC_BASE_URL` should only be set to that custom domain after `POST /mcp`
+works through the distribution.
+
 ---
 
 ## Request log
 
-`/api/logs` returns the in-memory log of MCP tool calls to authenticated browser/API users. The store is a per-container `deque(maxlen=500)` — it resets on Lambda cold start and is not shared across concurrent containers. For persistent audit logs, query CloudWatch Logs directly; all tool calls are emitted as structured JSON.
+`/api/logs` returns the in-memory log of MCP tool calls to authenticated
+browser or API users. The store is a per-container `deque(maxlen=500)`, so
+it resets on Lambda cold start and is not shared across concurrent
+containers. For persistent audit logs, query CloudWatch Logs directly; all
+tool calls are emitted as structured JSON.
 
 Fit-signal entries store only `role_title` and whether a company name was present, not the company name itself.

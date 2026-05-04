@@ -8,6 +8,7 @@ samconfig.toml
 
 # Claude Code project files
 .claude/
+.mcp.json
 
 # Private profile overrides — keep actual compensation out of the repo
 profiles/*.private.yaml

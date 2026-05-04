@@ -22,7 +22,7 @@ Parameters:
   PublicBaseUrl:
     Type: String
     Default: ""
-    Description: "Optional public HTTPS base URL for the web UI and displayed MCP endpoint (for example https://ombud.cmoberg.com)."
+    Description: "Optional public HTTPS base URL for the web UI and displayed MCP endpoint. Only set this if the domain forwards POST /mcp to the Lambda Function URL unchanged (for example https://ombud.cmoberg.com)."
   CorsAllowOrigin:
     Type: String
     Default: "*"

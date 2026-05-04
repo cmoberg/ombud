@@ -155,7 +155,7 @@ consent:
 
 ### `get_fit_signal` response schema
 
-```
+```text
 overall:
   signal:     strong | likely | possible | poor
   confidence: float 0–1
@@ -227,7 +227,7 @@ async with streamable_http_client("http://localhost:8000/mcp") as (read, write, 
 
 The server runs on AWS Lambda + Function URL. Permanently free at this traffic level.
 
-### Prerequisites
+### Deployment prerequisites
 
 - [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
 - AWS credentials configured
@@ -236,17 +236,37 @@ The server runs on AWS Lambda + Function URL. Permanently free at this traffic l
 
 ```bash
 make deploy
+# Uses the values saved in samconfig.toml.
+
+make deploy-guided
 # Prompts for SAM parameters including AdminToken (set a strong random value),
-# ProfileBucket (optional), CandidateId, and CorsAllowOrigin.
-# Outputs: FunctionUrl — your public MCP server endpoint
+# ProfileBucket (optional), CandidateId, PublicBaseUrl, and CorsAllowOrigin.
 ```
 
 The Function URL is your MCP server address. Configure it as an MCP server in any compatible client.
 
+If you put a custom domain or CloudFront distribution in front of the Function URL, do not point MCP clients at that domain unless it transparently forwards `POST /mcp` to Lambda. A CloudFront HTML `403` during `initialize` means the request was blocked before it reached the app.
+
+If you set `PublicBaseUrl`, the UI will display `{PublicBaseUrl}/mcp` as the endpoint. Only set it when that public domain is fully working for MCP traffic; otherwise leave it empty and use the Function URL directly.
+
+### CloudFront requirements
+
+If you use CloudFront or another custom domain in front of the Lambda Function URL, the `/mcp` behavior must preserve MCP traffic end to end:
+
+- Forward `POST /mcp` to the Lambda Function URL unchanged.
+- Allow `POST` on the `/mcp*` behavior.
+- Forward the client's `Accept` header. MCP initialization requires a client that accepts `application/json`.
+- Use the Lambda Function URL hostname as the origin with `HTTPS only`.
+- Disable caching, or use a no-cache behavior, for `/mcp*`.
+- Do not attach WAF or edge rules that block MCP `POST` requests.
+- Do not require CloudFront signing or Origin Access Control behavior that changes the request shape for `POST`.
+
+If the domain works for a browser but MCP clients fail, compare `POST /mcp` against both the CloudFront domain and the raw Lambda Function URL before changing the app.
+
 ### Parameters
 
 | Parameter | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `CandidateId` | `candidate` | Profile ID — filename without `.yaml` |
 | `AdminToken` | _(required)_ | Bearer token for profile write operations |
 | `ProfileBucket` | _(empty)_ | S3 bucket for live profile updates without redeployment |
@@ -267,7 +287,7 @@ Fit-signal log entries store `role_title` and whether a company name was supplie
 
 ## Project structure
 
-```
+```text
 src/
 ├── server.py        # FastMCP tools + Starlette app + Lambda handler
 ├── profile.py       # YAML loader (local or S3) + consent filter
@@ -290,6 +310,12 @@ See [`ARCHITECTURE.md`](ARCHITECTURE.md) for component map, data flow, fit engin
 
 ## Background
 
-Built by [Carl Moberg](https://cmoberg.com) to demonstrate a thesis: that the abstracted interface between candidates and employers doesn't yet exist on the candidate's side, and that MCP is the right protocol to build it on.
+Built by [Carl Moberg](https://cmoberg.com) to demonstrate a thesis:
+that the abstracted interface between candidates and employers does not yet
+exist on the candidate's side, and that MCP is the right protocol to build
+it on.
 
-The structural opening: every ATS, every sourcing tool, every recruiting workflow is built for the employer. A product that genuinely represents the candidate — one that can tell a recruiter agent "this role isn't right for this person" — runs against the grain of every incumbent in the space.
+The structural opening: every ATS, every sourcing tool, every recruiting
+workflow is built for the employer. A product that genuinely represents the
+candidate, one that can tell a recruiter agent "this role isn't right for
+this person", runs against the grain of every incumbent in the space.
