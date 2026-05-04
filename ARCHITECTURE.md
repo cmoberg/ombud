@@ -19,10 +19,12 @@ AWS Lambda (Python 3.12, arm64)
   │     ├── get_availability
   │     └── get_fit_signal → fit_engine.py (rule-based, no I/O)
   ├── Starlette routes
-  │     ├── GET  /              web UI
-  │     ├── GET  /api/profile/{id}
-  │     ├── PUT  /api/profile/{id}  ← bearer token required
-  │     └── GET  /api/logs
+  │     ├── GET  /              web UI login + editor
+  │     ├── POST /api/login
+  │     ├── POST /api/logout
+  │     ├── GET  /api/profile/{id}  ← token required
+  │     ├── PUT  /api/profile/{id}  ← token required
+  │     └── GET  /api/logs          ← token required
   └── profile.py
         ├── local filesystem  (dev)
         └── S3 bucket         (prod, if PROFILE_BUCKET set)
@@ -35,10 +37,10 @@ Structured logs → CloudWatch Logs
 ## Data flow
 
 ### `get_profile`
-Loads the candidate YAML and returns `identity`, `experience`, `education`, and `skills`. No consent filtering — these sections are employer-visible by default.
+Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_fields`, and returns `identity`, `experience`, `education`, and `skills`.
 
 ### `get_availability`
-Loads the candidate YAML and returns `search.status`, `available_from`, `notice_period`, `target`, and `geography`. Compensation is excluded from this tool's scope regardless of consent settings.
+Loads the candidate YAML, checks `consent.employer_visible`, applies `withheld_fields`, and returns `search.status`, `available_from`, `notice_period`, `target`, and `geography`. Compensation is excluded from this tool's scope regardless of consent settings.
 
 ### `get_fit_signal`
 ```
@@ -99,7 +101,9 @@ Two controls in `consent`:
 
 MCP tools (employer-facing) are unauthenticated — public read access is intentional.
 
-The profile write endpoint (`PUT /api/profile/{id}`) requires `Authorization: Bearer <ADMIN_TOKEN>`. The token is set via the `AdminToken` SAM parameter at deploy time and injected as an environment variable. An empty or missing token causes the endpoint to return 401 for all requests.
+The browser-facing routes use a simple token gate. `POST /api/login` accepts either `USER_TOKEN` or `ADMIN_TOKEN` and sets an HTTP-only cookie. If `USER_TOKEN` is unset, it falls back to `ADMIN_TOKEN`.
+
+The profile read/write endpoints (`GET/PUT /api/profile/{id}`) and `/api/logs` also accept `Authorization: Bearer <token>` directly. In the SAM deployment, `ADMIN_TOKEN` is the configured token; an empty or missing token leaves the UI/API effectively open unless you set one.
 
 ---
 
@@ -121,4 +125,6 @@ Lambda runtime: Python 3.12, arm64, 512 MB, 30s timeout.
 
 ## Request log
 
-`/api/logs` returns the in-memory log of MCP tool calls. The store is a per-container `deque(maxlen=500)` — it resets on Lambda cold start and is not shared across concurrent containers. For persistent audit logs, query CloudWatch Logs directly; all tool calls are emitted as structured JSON.
+`/api/logs` returns the in-memory log of MCP tool calls to authenticated browser/API users. The store is a per-container `deque(maxlen=500)` — it resets on Lambda cold start and is not shared across concurrent containers. For persistent audit logs, query CloudWatch Logs directly; all tool calls are emitted as structured JSON.
+
+Fit-signal entries store only `role_title` and whether a company name was present, not the company name itself.

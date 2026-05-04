@@ -1,5 +1,6 @@
 import contextlib
 import os
+import secrets
 import time
 from typing import Optional
 
@@ -18,11 +19,55 @@ from profile import apply_withheld, load_profile, read_raw_profile, save_raw_pro
 
 _DEFAULT_CANDIDATE = os.environ.get("CANDIDATE_ID", "cmoberg")
 _ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+_USER_TOKEN = os.environ.get("USER_TOKEN") or _ADMIN_TOKEN
+_AUTH_COOKIE = "ombud_auth"
 
 _PROFILE_REQUIRED_KEYS = {"identity", "experience", "education", "skills", "search", "culture", "consent"}
 
 mcp = FastMCP("Ombud — Carl Moberg", stateless_http=True, json_response=True)
 # streamable_http_path defaults to "/mcp" — endpoint is {base}/mcp
+
+
+def _load_employer_profile() -> dict:
+    profile = load_profile(_DEFAULT_CANDIDATE)
+    if not profile.get("consent", {}).get("employer_visible", True):
+        raise ValueError("candidate_not_visible")
+    return apply_withheld(profile)
+
+
+def _not_visible_response() -> dict:
+    return {
+        "error": "candidate_not_visible",
+        "message": "This candidate is not currently visible to employer queries.",
+    }
+
+
+def _is_authenticated(request: Request) -> bool:
+    if not _USER_TOKEN:
+        return True
+
+    bearer = request.headers.get("Authorization", "")
+    if bearer == f"Bearer {_USER_TOKEN}" or bearer == f"Bearer {_ADMIN_TOKEN}":
+        return True
+
+    cookie_token = request.cookies.get(_AUTH_COOKIE)
+    if not cookie_token:
+        return False
+
+    return secrets.compare_digest(cookie_token, _USER_TOKEN) or (
+        bool(_ADMIN_TOKEN) and secrets.compare_digest(cookie_token, _ADMIN_TOKEN)
+    )
+
+
+def _unauthorized_response() -> JSONResponse:
+    return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+
+def _loggable_fit_inputs(role_title: str, company_name: Optional[str]) -> dict:
+    inputs = {"role_title": role_title}
+    if company_name:
+        inputs["has_company_name"] = True
+    return inputs
 
 
 # ── MCP tools ────────────────────────────────────────────────────────────────
@@ -34,7 +79,10 @@ def get_profile() -> dict:
     education, and skills. Use this to understand who the candidate is.
     """
     t0 = time.monotonic()
-    profile = load_profile(_DEFAULT_CANDIDATE)
+    try:
+        profile = _load_employer_profile()
+    except ValueError:
+        return _not_visible_response()
     result = {
         "identity": profile["identity"],
         "experience": profile["experience"],
@@ -52,7 +100,10 @@ def get_availability() -> dict:
     preferences, and geographic constraints. Does not include compensation details.
     """
     t0 = time.monotonic()
-    profile = load_profile(_DEFAULT_CANDIDATE)
+    try:
+        profile = _load_employer_profile()
+    except ValueError:
+        return _not_visible_response()
     search = profile["search"]
     result = {
         "status": search["status"],
@@ -90,12 +141,10 @@ def get_fit_signal(
     """
     t0 = time.monotonic()
     profile = load_profile(_DEFAULT_CANDIDATE)
-
-    if not profile.get("consent", {}).get("employer_visible", True):
-        return {
-            "error": "candidate_not_visible",
-            "message": "This candidate is not currently visible to employer queries.",
-        }
+    try:
+        employer_profile = _load_employer_profile()
+    except ValueError:
+        return _not_visible_response()
 
     role = {k: v for k, v in {
         "title": role_title,
@@ -115,7 +164,7 @@ def get_fit_signal(
         "context": context,
     }.items() if v is not None}
 
-    signal = compute_fit_signal(apply_withheld(profile), role)
+    signal = compute_fit_signal(employer_profile, role)
     signal["schema_version"] = "1.0"
     signal["consent"] = {
         "withheld": profile["consent"].get("withheld_fields", []),
@@ -125,7 +174,7 @@ def get_fit_signal(
     log_tool_call(
         "get_fit_signal",
         _DEFAULT_CANDIDATE,
-        {"role_title": role_title, "company_name": company_name},
+        _loggable_fit_inputs(role_title, company_name),
         (time.monotonic() - t0) * 1000,
         outcome={"signal": signal.get("overall", {}).get("signal")},
     )
@@ -135,6 +184,8 @@ def get_fit_signal(
 # ── Web UI routes ─────────────────────────────────────────────────────────────
 
 async def homepage(request: Request) -> HTMLResponse:
+    if not _is_authenticated(request):
+        return HTMLResponse(_render_login_ui(), status_code=401)
     try:
         profile = load_profile(_DEFAULT_CANDIDATE)
         name = profile.get("identity", {}).get("name", _DEFAULT_CANDIDATE)
@@ -144,7 +195,41 @@ async def homepage(request: Request) -> HTMLResponse:
     return HTMLResponse(_render_ui(name, _DEFAULT_CANDIDATE, f"{base}/mcp"))
 
 
+async def login_api(request: Request) -> JSONResponse:
+    if not _USER_TOKEN:
+        return JSONResponse({"status": "disabled"}, status_code=400)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+    token = payload.get("token", "")
+    if token not in {_USER_TOKEN, _ADMIN_TOKEN}:
+        return _unauthorized_response()
+
+    response = JSONResponse({"status": "ok"})
+    response.set_cookie(
+        _AUTH_COOKIE,
+        token,
+        httponly=True,
+        samesite="lax",
+        secure=request.url.scheme == "https",
+        path="/",
+    )
+    return response
+
+
+async def logout_api(_request: Request) -> JSONResponse:
+    response = JSONResponse({"status": "ok"})
+    response.delete_cookie(_AUTH_COOKIE, path="/")
+    return response
+
+
 async def profile_api(request: Request) -> Response:
+    if not _is_authenticated(request):
+        return _unauthorized_response()
+
     candidate_id = request.path_params["candidate_id"]
     if request.method == "GET":
         try:
@@ -177,6 +262,8 @@ async def profile_api(request: Request) -> Response:
 
 
 async def logs_api(_request: Request) -> JSONResponse:
+    if not _is_authenticated(_request):
+        return _unauthorized_response()
     return JSONResponse(log_store.all_entries())
 
 
@@ -191,6 +278,8 @@ async def lifespan(app: Starlette):
 app = Starlette(
     routes=[
         Route("/", homepage),
+        Route("/api/login", login_api, methods=["POST"]),
+        Route("/api/logout", logout_api, methods=["POST"]),
         Route("/api/profile/{candidate_id}", profile_api, methods=["GET", "PUT"]),
         Route("/api/logs", logs_api),
         Mount("/", app=mcp.streamable_http_app()),
@@ -397,6 +486,81 @@ if (saved) document.getElementById("token").value = saved;
 load();
 refreshLog();
 setInterval(refreshLog, 5000);
+</script>
+</body>
+</html>"""
+
+
+def _render_login_ui() -> str:
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ombud Login</title>
+<style>
+:root {
+  --bg:#0f0f0f; --surface:#1a1a1a; --border:#272727;
+  --text:#e0e0e0; --muted:#777; --accent:#4ade80; --danger:#f87171;
+  --mono:"JetBrains Mono","Fira Code","Cascadia Code",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  min-height:100vh;display:grid;place-items:center;background:var(--bg);
+  color:var(--text);font-family:var(--sans);padding:24px;
+}
+.card{
+  width:min(420px,100%);background:var(--surface);border:1px solid var(--border);
+  border-radius:10px;padding:24px;
+}
+h1{font-size:.85rem;letter-spacing:.12em;color:var(--accent);margin-bottom:14px}
+p{font-size:.9rem;line-height:1.5;color:var(--muted);margin-bottom:18px}
+input{
+  width:100%;background:#111;border:1px solid var(--border);border-radius:6px;
+  padding:12px 14px;color:var(--text);font-family:var(--mono);font-size:.85rem;outline:none;
+}
+input:focus{border-color:#3a3a3a}
+button{
+  margin-top:12px;width:100%;padding:10px 14px;border:none;border-radius:6px;
+  background:var(--accent);color:#000;font-weight:700;cursor:pointer;
+}
+.msg{min-height:1.2rem;font-size:.82rem;margin-top:12px;color:var(--muted)}
+.msg.error{color:var(--danger)}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>OMBUD</h1>
+    <p>Enter the access token to view and edit the profile.</p>
+    <input type="password" id="token" placeholder="Access token" autocomplete="current-password">
+    <button onclick="login()">Continue</button>
+    <div class="msg" id="msg"></div>
+  </div>
+<script>
+async function login() {
+  const msg = document.getElementById("msg");
+  msg.className = "msg";
+  msg.textContent = "Signing in…";
+  const token = document.getElementById("token").value;
+  try {
+    const r = await fetch("/api/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({token}),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      msg.textContent = "Error: " + (j.error || "unauthorized");
+      msg.className = "msg error";
+      return;
+    }
+    window.location.reload();
+  } catch (e) {
+    msg.textContent = "Error: " + e.message;
+    msg.className = "msg error";
+  }
+}
 </script>
 </body>
 </html>"""

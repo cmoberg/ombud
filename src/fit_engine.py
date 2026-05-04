@@ -174,7 +174,7 @@ def _constraints(role: dict, search: dict, culture: dict) -> dict:
     if role_remote and cand_remote:
         conflict = (
             (cand_remote == "remote_only" and role_remote == "onsite")
-            or (cand_remote == "onsite" and role_remote == "remote")
+            or (cand_remote == "onsite" and role_remote == "remote_only")
         )
         if conflict:
             unmet.append(f"remote policy conflict: candidate '{cand_remote}', role '{role_remote}'")

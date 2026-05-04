@@ -16,6 +16,8 @@ Three MCP tools, one candidate profile:
 
 **`get_fit_signal`** — Returns a calibrated fit assessment for a described role. Evaluates skills match, experience fit, seniority calibration, culture alignment, candidate interest, readiness, and hard constraints using a deterministic rule-based engine. No LLM calls. Compensation details are never exposed to callers — constraint violations surface as plain language.
 
+If `consent.employer_visible` is `false`, all three MCP tools return `candidate_not_visible`.
+
 ---
 
 ## Getting started
@@ -34,13 +36,19 @@ cd ombud
 # Install dependencies
 make install
 
-# Start the server (sets ADMIN_TOKEN=dev-token for local writes)
+# Start the server (sets ADMIN_TOKEN=dev-token for local UI/API access)
 make dev
 # → http://localhost:8000
 # → MCP endpoint: http://localhost:8000/mcp
 ```
 
-The web UI at `http://localhost:8000` lets you view and edit the profile. Use `dev-token` as the admin token when saving locally.
+The web UI at `http://localhost:8000` requires a token before it will show the editor. By default, use `dev-token` for local login and profile edits.
+
+### Run tests
+
+```bash
+.venv/bin/python -m pytest -q
+```
 
 ### Add your profile
 
@@ -251,7 +259,9 @@ By default the server bundles `profiles/` into the Lambda package. For a live pr
 
 ### Request log
 
-The `/api/logs` endpoint returns a live log of MCP tool calls. In Lambda, the log is per-container and resets on cold start. For persistent audit logs, query CloudWatch Logs — all tool calls are emitted as structured JSON.
+The `/api/logs` endpoint requires the same browser/API token as the web UI. In Lambda, the log is per-container and resets on cold start. For persistent audit logs, query CloudWatch Logs — all tool calls are emitted as structured JSON.
+
+Fit-signal log entries store `role_title` and whether a company name was supplied, but they do not persist the raw company name.
 
 ---
 
