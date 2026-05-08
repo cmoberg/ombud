@@ -16,7 +16,7 @@ freeze:
 	uv export --no-dev --no-hashes -o src/requirements.txt
 
 deploy:
-	sam build && sam deploy
+	sam build && sam deploy --no-confirm-changeset
 
 deploy-guided:
 	sam build && sam deploy --guided

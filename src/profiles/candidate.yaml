@@ -7,6 +7,7 @@ completeness_score: 0.90
 # ── IDENTITY ────────────────────────────────────────────────
 identity:
   name: "Carl Moberg"
+  esco_occupation_uri: "http://data.europa.eu/esco/occupation/7b1b5da8-573a-49bb-a38e-68725a949f4f"
   headline: "Co-founder & CTO · Edge Infrastructure · $175M Exit · Agentic AI"
   summary: |
     Technology executive with 25 years at the intersection of infrastructure
@@ -30,6 +31,7 @@ identity:
 experience:
   - company: "Avassa Systems"
     title: "Co-founder & CTO"
+    esco_occupation_uri: "http://data.europa.eu/esco/occupation/7b1b5da8-573a-49bb-a38e-68725a949f4f"
     start_date: "2020-03"
     end_date: "2026-04"
     current: false
@@ -49,6 +51,7 @@ experience:
 
   - company: "Cisco"
     title: "Senior Director of Product Management"
+    esco_occupation_uri: "http://data.europa.eu/esco/occupation/a79170ad-0b7b-4697-864f-1748359aa10a"
     start_date: "2014-08"
     end_date: "2020-03"
     current: false
@@ -68,6 +71,7 @@ experience:
 
   - company: "Tail-f Systems"
     title: "Co-founder · VP Technology & North America CTO"
+    esco_occupation_uri: "http://data.europa.eu/esco/occupation/7b1b5da8-573a-49bb-a38e-68725a949f4f"
     start_date: "2006-06"
     end_date: "2014-08"
     current: false
@@ -87,6 +91,7 @@ experience:
 
   - company: "ServiceFactory AB"
     title: "Co-founder & Director"
+    esco_occupation_uri: null  # no ESCO equivalent for startup co-founder/director
     start_date: "1999-11"
     end_date: "2006-05"
     current: false
@@ -104,6 +109,7 @@ experience:
 
   - company: "Telia AB"
     title: "Senior Network Architect / Network Operations Engineer"
+    esco_occupation_uri: "http://data.europa.eu/esco/occupation/e0b544dd-b621-4126-a55e-054af25c6ea0"
     start_date: "1997-01"
     end_date: "1999-11"
     current: false
@@ -131,61 +137,61 @@ education:
 # ── SKILLS ──────────────────────────────────────────────────
 skills:
   - label: "Distributed Systems"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/897b393f-e7e0-4248-a40d-d77119694e83"
     proficiency: "expert"
     years: 25
     basis: "stated"
 
   - label: "Edge Computing"
-    esco_uri: null
+    esco_uri: null  # no ESCO equivalent; taxonomy predates edge as a distinct discipline
     proficiency: "expert"
     years: 8
     basis: "stated"
 
   - label: "Network Automation (YANG, NETCONF, OpenConfig)"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/0ab03c6c-281b-48f4-83e0-10eeb27a1bae"
     proficiency: "expert"
     years: 18
     basis: "stated"
 
   - label: "AI/ML Infrastructure"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/8369c2d6-c100-4cf6-bd83-9668d8678433"
     proficiency: "advanced"
     years: 4
     basis: "stated"
 
   - label: "Agentic AI / MCP"
-    esco_uri: null
+    esco_uri: null  # no ESCO equivalent; concept postdates current taxonomy
     proficiency: "advanced"
     years: 2
     basis: "stated"
 
   - label: "Platform Strategy"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/248894d1-42dc-474f-af6e-2da52ac0c679"
     proficiency: "expert"
     years: 15
     basis: "stated"
 
   - label: "Developer Ecosystems"
-    esco_uri: null
+    esco_uri: null  # no ESCO equivalent; developer relations is not modelled
     proficiency: "expert"
     years: 15
     basis: "stated"
 
   - label: "Product Leadership"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/29fb886c-6be0-4e93-9ea1-232881f2092a"
     proficiency: "expert"
     years: 15
     basis: "stated"
 
   - label: "Cloud-Native / Containers"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/bd14968e-e409-45af-b362-3495ed7b10e0"
     proficiency: "advanced"
     years: 8
     basis: "stated"
 
   - label: "Enterprise Go-to-Market"
-    esco_uri: null
+    esco_uri: "http://data.europa.eu/esco/skill/e7219848-a27a-4bf4-8775-d367707be7c9"
     proficiency: "expert"
     years: 15
     basis: "stated"

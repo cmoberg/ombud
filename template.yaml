@@ -39,6 +39,15 @@ Globals:
     Timeout: 30
 
 Resources:
+  OmbudLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+
   OmbudFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -51,6 +60,7 @@ Resources:
           CANDIDATE_ID: !Ref CandidateId
           ADMIN_TOKEN: !Ref AdminToken
           PUBLIC_BASE_URL: !Ref PublicBaseUrl
+          LOG_BUCKET: !Ref OmbudLogBucket
       FunctionUrlConfig:
         AuthType: NONE
         Cors:
@@ -58,6 +68,25 @@ Resources:
           AllowMethods: ["GET", "POST", "PUT", "DELETE"]
           AllowHeaders: ["*"]
           MaxAge: 86400
+
+  OmbudLogBucketPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: OmbudLogBucketAccess
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: ["s3:GetObject", "s3:PutObject"]
+            Resource: !Sub "${OmbudLogBucket.Arn}/logs/*"
+          - Effect: Allow
+            Action: "s3:ListBucket"
+            Resource: !GetAtt OmbudLogBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix: "logs/*"
+      Roles:
+        - !Ref OmbudFunctionRole
 
   OmbudS3Policy:
     Type: AWS::IAM::Policy
