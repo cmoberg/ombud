@@ -2,7 +2,9 @@ import contextlib
 import os
 import secrets
 import time
-from typing import Optional
+from typing import Annotated, Optional
+
+from pydantic import Field
 
 import yaml
 from mangum import Mangum
@@ -315,33 +317,83 @@ def create_app() -> Starlette:
         stateless_http=True,
         json_response=True,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+        instructions=(
+            "This server represents Carl Moberg — a technology executive and co-founder "
+            "available for CTO, CEO, VP Engineering, or co-founder roles.\n\n"
+            "Recommended call sequence:\n"
+            "1. mcp_get_profile — fetch identity, work history, education, and skills. "
+            "Call this first to understand who the candidate is.\n"
+            "2. mcp_get_availability — fetch current search status, available-from date, "
+            "target roles, seniority, industries, company stage preferences, and geography. "
+            "Call this to determine whether the candidate is actively looking and what they want.\n"
+            "3. mcp_get_fit_signal — submit a role and receive a structured fit assessment "
+            "covering skills match, experience, seniority calibration, culture alignment, "
+            "candidate interest, and hard constraints. Only call this when you have a specific "
+            "role to evaluate. Provide as many role details as available — especially "
+            "role_description — to improve signal accuracy.\n\n"
+            "All tools are read-only and require no authentication."
+        ),
     )
     # streamable_http_path defaults to "/mcp" — endpoint is {base}/mcp
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
     def mcp_get_profile() -> dict:
+        """
+        Returns Carl Moberg's structured professional profile: identity (name, headline,
+        location, links), full work history with scope and highlights, education, and
+        a skill inventory with proficiency levels and years of experience.
+
+        Call this first to establish who the candidate is before evaluating fit or
+        checking availability.
+        """
         return get_profile()
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
     def mcp_get_availability() -> dict:
+        """
+        Returns the candidate's current job search status, availability timeline,
+        target role preferences, and geographic constraints.
+
+        Includes: search status (active/passive/closed), available-from date, notice
+        period, target titles and seniority levels, preferred industries, company stage
+        range, company size range, preferred locations, and remote policy.
+
+        Does not include compensation details (withheld by candidate consent).
+        Call mcp_get_fit_signal to check whether a specific role's compensation is
+        likely to be in range.
+        """
         return get_availability()
 
-    @mcp.tool()
+    @mcp.tool(annotations={"readOnlyHint": True, "idempotentHint": True})
     def mcp_get_fit_signal(
-        role_title: str,
-        role_description: Optional[str] = None,
-        company_name: Optional[str] = None,
-        company_stage: Optional[str] = None,
-        company_size: Optional[int] = None,
-        industry: Optional[str] = None,
-        location: Optional[str] = None,
-        remote_policy: Optional[str] = None,
-        compensation_base_min: Optional[int] = None,
-        compensation_base_max: Optional[int] = None,
-        seniority_level: Optional[str] = None,
-        functional_area: Optional[str] = None,
-        context: Optional[str] = None,
+        role_title: Annotated[str, Field(description="Job title for the role being evaluated.")],
+        role_description: Annotated[Optional[str], Field(description="Full role description or JD text. Providing this significantly improves skill-match accuracy.")] = None,
+        company_name: Annotated[Optional[str], Field(description="Name of the hiring company.")] = None,
+        company_stage: Annotated[Optional[str], Field(description="Funding or growth stage: seed, series_a, series_b, series_c, growth, or enterprise.")] = None,
+        company_size: Annotated[Optional[int], Field(description="Current headcount of the company.")] = None,
+        industry: Annotated[Optional[str], Field(description="Industry or sector, e.g. infrastructure_software, developer_tools, agentic_ai, fintech, saas.")] = None,
+        location: Annotated[Optional[str], Field(description="Role location, e.g. 'Stockholm, Sweden' or 'San Francisco, CA'. Use 'Remote' for fully remote.")] = None,
+        remote_policy: Annotated[Optional[str], Field(description="Remote work policy: remote, hybrid, or onsite.")] = None,
+        compensation_base_min: Annotated[Optional[int], Field(description="Minimum base salary offered, in USD.")] = None,
+        compensation_base_max: Annotated[Optional[int], Field(description="Maximum base salary offered, in USD.")] = None,
+        seniority_level: Annotated[Optional[str], Field(description="Seniority level: c_suite, vp, director, senior, mid, or junior.")] = None,
+        functional_area: Annotated[Optional[str], Field(description="Functional area: engineering, product, design, sales, marketing, operations, etc.")] = None,
+        context: Annotated[Optional[str], Field(description="Any additional context about the role, team, or company not captured in other fields.")] = None,
     ) -> dict:
+        """
+        Returns a calibrated fit assessment for the candidate against a described role.
+
+        Evaluates: skills match, experience fit, seniority calibration, culture alignment,
+        candidate interest, search readiness, and hard constraints (geography, company stage,
+        equity requirements). Returns an overall signal (strong/likely/possible/poor), a
+        numeric fit score, dimension-level breakdowns, blockers, strengths, gaps, and a
+        recommended action (contact/explore/do_not_contact).
+
+        At minimum provide role_title. Each additional field improves precision — especially
+        role_description (skill matching), company_stage (stage fit), and location (geography
+        constraints). Compensation fields are evaluated against withheld candidate preferences;
+        unknown values are flagged in the constraints.unknown list rather than counted as unmet.
+        """
         return get_fit_signal(
             role_title=role_title,
             role_description=role_description,
@@ -380,6 +432,14 @@ app = _SourceIpMiddleware(create_app())
 
 
 def handler(event, context):
+    # Set source IP from the raw Lambda event before Mangum's asyncio loop starts,
+    # so the ContextVar is visible in every Task spawned within that loop.
+    hdrs = event.get("headers") or {}
+    forwarded = hdrs.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() if forwarded else ""
+    if not ip:
+        ip = ((event.get("requestContext") or {}).get("http") or {}).get("sourceIp", "unknown")
+    _source_ip.set(ip)
     return Mangum(_SourceIpMiddleware(create_app()), lifespan="on")(event, context)
 
 
