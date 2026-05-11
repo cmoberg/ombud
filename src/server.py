@@ -223,15 +223,12 @@ async def homepage(request: Request) -> HTMLResponse:
     base = _public_base_url(request)
     mcp_url = f"{base}/mcp"
     try:
-        profile = load_profile(_DEFAULT_CANDIDATE)
-        identity = profile.get("identity", {})
-        name = identity.get("name", _DEFAULT_CANDIDATE)
-        headline = identity.get("headline", "")
+        profile = _load_employer_profile()
     except Exception:
-        name = _DEFAULT_CANDIDATE
-        headline = ""
+        profile = {}
     if not _is_authenticated(request):
-        return HTMLResponse(_render_landing_ui(mcp_url, name, headline))
+        return HTMLResponse(_render_landing_ui(mcp_url, profile))
+    name = (profile.get("identity") or {}).get("name", _DEFAULT_CANDIDATE)
     return HTMLResponse(_render_ui(name, _DEFAULT_CANDIDATE, mcp_url))
 
 
@@ -582,8 +579,14 @@ td:first-child{{color:var(--muted);white-space:nowrap;padding-right:12px}}
   border:1px solid var(--line);font-size:.65rem;background:#fff;
   white-space:nowrap;
 }}
-.strong,.likely,.possible{{color:#0b46ff}}
-.poor{{color:var(--danger)}}
+.sig-badge{{
+  display:inline-block;padding:2px 8px;font-size:.65rem;font-weight:600;
+  border-radius:999px;letter-spacing:.04em;white-space:nowrap;text-transform:uppercase;
+}}
+.sig-strong{{background:#e6f4ea;color:#1a6632}}
+.sig-likely{{background:#e8f0fe;color:#1a4bb0}}
+.sig-possible{{background:#fef9e7;color:#7a5c00}}
+.sig-poor{{background:#fdecea;color:#9b1c1c}}
 .empty{{color:var(--muted);text-align:center;padding:40px 0;font-size:.82rem}}
 .data-row{{cursor:pointer}}
 .data-row:hover td{{background:rgba(0,0,0,.02)}}
@@ -727,9 +730,16 @@ async function refreshLog() {{
     tdT.appendChild(badge);
     tr.insertCell().textContent = (e.inputs && (e.inputs.role_title || e.inputs.company_name)) || "—";
     const tdS = tr.insertCell();
-    const sig = (e.outcome && e.outcome.signal) || "—";
-    tdS.textContent = sig;
-    if (e.outcome && e.outcome.signal) tdS.className = e.outcome.signal;
+    const sig = e.outcome && e.outcome.signal;
+    if (sig) {{
+      const b = document.createElement("span");
+      b.className = "sig-badge sig-" + sig;
+      b.textContent = sig;
+      tdS.appendChild(b);
+    }} else {{
+      tdS.textContent = "—";
+      tdS.style.color = "var(--muted)";
+    }}
 
     const detailTr = tbody.insertRow();
     detailTr.className = "detail-row";
@@ -756,7 +766,60 @@ setInterval(refreshLog, 5000);
 </html>"""
 
 
-def _render_landing_ui(mcp_url: str, name: str, headline: str) -> str:
+def _render_landing_ui(mcp_url: str, profile: dict) -> str:
+    identity = profile.get("identity") or {}
+    search   = profile.get("search") or {}
+    links    = identity.get("links") or {}
+    geo      = search.get("geography") or {}
+
+    name     = identity.get("name", "")
+    first    = name.split()[0] if name else "the candidate"
+
+    # Bio: strip the meta-sentence about Ombud if present
+    summary_raw = (identity.get("summary") or "").strip()
+    ombud_marker = "I built Ombud"
+    bio = summary_raw[:summary_raw.index(ombud_marker)].strip().rstrip(".") if ombud_marker in summary_raw else summary_raw
+
+    linkedin = links.get("linkedin", "")
+    website  = links.get("website", "")
+
+    # Availability
+    is_active     = search.get("status") == "active_search"
+    available_from = search.get("available_from", "")
+    month_names = ["","January","February","March","April","May","June",
+                   "July","August","September","October","November","December"]
+    avail_str = ""
+    if available_from:
+        try:
+            y, m, _ = available_from.split("-")
+            avail_str = f"{month_names[int(m)]} {y}"
+        except Exception:
+            avail_str = available_from
+
+    chip_html = ""
+    if is_active:
+        chip_text = f"Actively looking · Available {avail_str}" if avail_str else "Actively looking"
+        chip_html = f'<div class="avail-chip">{chip_text}</div>'
+
+    # Human-readable "looking for" rows (editorially crafted from preferences wiki)
+    lf_rows = [
+        ("Roles",     "External / Market-facing CTO &nbsp;·&nbsp; Field CTO &nbsp;·&nbsp; VP Solutions Engineering"),
+        ("Companies", "Series A–D &nbsp;·&nbsp; Application-layer SaaS, developer tools, data platforms, AI-adjacent"),
+        ("Location",  "Stockholm &nbsp;·&nbsp; EU &nbsp;·&nbsp; Remote"),
+    ]
+    lf_html = "\n".join(
+        f'<div class="lf-row"><span class="lf-key">{k}</span><span class="lf-val">{v}</span></div>'
+        for k, v in lf_rows
+    )
+
+    # External profile links
+    ext_links = []
+    if linkedin:
+        ext_links.append(f'<a class="ext-link" href="https://{linkedin.lstrip("https://")}" target="_blank" rel="noopener">LinkedIn ↗</a>')
+    if website:
+        ext_links.append(f'<a class="ext-link" href="{website}" target="_blank" rel="noopener">cmoberg.com ↗</a>')
+    ext_links_html = "\n".join(ext_links)
+
     # Build snippets outside f-string to avoid brace-escaping chaos
     snip_other = (
         '{\n'
@@ -805,7 +868,7 @@ def _render_landing_ui(mcp_url: str, name: str, headline: str) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ombud — {name}</title>
+<title>{name}</title>
 <style>
 :root {{
   --paper:#fcfbf7;
@@ -816,6 +879,8 @@ def _render_landing_ui(mcp_url: str, name: str, headline: str) -> str:
   --link:#0b46ff;
   --danger:#c3312f;
   --success:#326b2c;
+  --chip-bg:#eef4e8;
+  --chip-ink:#2a5c22;
   --mono:"JetBrains Mono","IBM Plex Mono","SFMono-Regular",monospace;
   --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }}
@@ -844,36 +909,41 @@ a:hover{{text-decoration:underline}}
   cursor:pointer;background:none;border:none;font-family:var(--sans);padding:0;
 }}
 .admin-link:hover{{color:var(--ink)}}
-.page{{width:min(760px,calc(100% - 40px));margin:0 auto;padding:52px 0 88px}}
-.identity{{margin-bottom:44px;padding-bottom:36px;border-bottom:1px solid var(--line)}}
-.identity h1{{font-size:2rem;font-weight:500;line-height:1.15;letter-spacing:-.02em;margin-bottom:10px}}
-.identity .hl{{color:var(--muted);font-size:.9rem;line-height:1.5}}
-.section{{margin-bottom:44px;padding-bottom:44px;border-bottom:1px solid var(--line)}}
+.page{{width:min(760px,calc(100% - 40px));margin:0 auto;padding:60px 0 96px}}
+/* Hero */
+.hero{{margin-bottom:52px;padding-bottom:48px;border-bottom:1px solid var(--line)}}
+.hero h1{{font-size:2.2rem;font-weight:500;line-height:1.1;letter-spacing:-.02em;margin-bottom:6px}}
+.tagline{{font-size:.9rem;color:var(--muted);margin-bottom:18px;line-height:1.5}}
+.avail-chip{{
+  display:inline-block;padding:4px 11px;
+  background:var(--chip-bg);color:var(--chip-ink);
+  font-size:.72rem;letter-spacing:.06em;font-weight:500;
+  border-radius:999px;margin-bottom:22px;
+}}
+.bio{{font-size:.95rem;line-height:1.75;color:var(--ink);max-width:600px;margin-bottom:22px}}
+.ext-links{{display:flex;gap:20px;flex-wrap:wrap}}
+.ext-link{{font-size:.85rem;color:var(--muted);font-weight:500}}
+.ext-link:hover{{color:var(--link);text-decoration:none}}
+/* Sections */
+.section{{margin-bottom:48px;padding-bottom:48px;border-bottom:1px solid var(--line)}}
 .section:last-of-type{{border-bottom:none;margin-bottom:0;padding-bottom:0}}
 .section-label{{
   font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:14px;font-weight:500;
+  color:var(--muted);margin-bottom:18px;font-weight:500;
 }}
-.prose{{font-size:.95rem;line-height:1.7;color:var(--ink);max-width:600px}}
+/* Looking for */
+.lf-row{{display:flex;gap:16px;margin-bottom:12px;align-items:baseline}}
+.lf-row:last-child{{margin-bottom:0}}
+.lf-key{{
+  font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);font-weight:500;min-width:80px;flex-shrink:0;padding-top:2px;
+}}
+.lf-val{{font-size:.9rem;line-height:1.6;color:var(--ink)}}
+/* Prose */
+.prose{{font-size:.95rem;line-height:1.75;color:var(--ink);max-width:600px}}
 .prose + .prose{{margin-top:12px}}
-.prose strong{{font-weight:600}}
-.endpoint-row{{
-  display:flex;align-items:stretch;
-  border:1px solid var(--line);background:#fff;max-width:560px;margin-top:18px;
-}}
-.endpoint-url{{
-  flex:1;padding:11px 14px;font-family:var(--mono);font-size:.83rem;color:var(--ink);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}}
-.copy-btn{{
-  padding:0 15px;border:none;border-left:1px solid var(--line);
-  background:transparent;cursor:pointer;font-family:var(--sans);
-  font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
-  white-space:nowrap;flex-shrink:0;transition:color .15s;
-}}
-.copy-btn:hover{{background:#f7f2e8;color:var(--ink)}}
-.copy-btn.ok{{color:var(--success)}}
-.client-tabs{{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:0;max-width:560px}}
+/* Client tabs */
+.client-tabs{{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:0;max-width:560px;margin-top:22px}}
 .client-tab{{
   padding:8px 16px;font-size:.78rem;cursor:pointer;
   color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;
@@ -882,16 +952,12 @@ a:hover{{text-decoration:underline}}
 .client-tab.active{{color:var(--ink);border-bottom-color:var(--ink)}}
 .client-pane{{display:none;max-width:560px}}
 .client-pane.active{{display:block}}
-.pane-hint{{
-  font-size:.75rem;color:var(--muted);padding:10px 0 8px;
-  font-family:var(--mono);
-}}
+.pane-hint{{font-size:.75rem;color:var(--muted);padding:10px 0 8px;font-family:var(--mono)}}
 .code-wrap{{position:relative}}
 pre.code-block{{
   padding:15px 18px;background:#fff;border:1px solid var(--line);
   font-family:var(--mono);font-size:.78rem;line-height:1.75;
-  color:var(--ink);white-space:pre;overflow-x:auto;
-  padding-right:72px;
+  color:var(--ink);white-space:pre;overflow-x:auto;padding-right:72px;
 }}
 .code-copy{{
   position:absolute;top:8px;right:8px;
@@ -901,8 +967,9 @@ pre.code-block{{
 }}
 .code-copy:hover{{border-color:var(--line-strong);color:var(--ink)}}
 .code-copy.ok{{color:var(--success)}}
+/* Admin */
 .admin-panel{{
-  margin-top:44px;padding-top:36px;border-top:1px solid var(--line);
+  margin-top:48px;padding-top:36px;border-top:1px solid var(--line);
   display:none;max-width:380px;
 }}
 .admin-panel.open{{display:block}}
@@ -924,11 +991,13 @@ input[type=password]:focus{{border-color:var(--line-strong)}}
 footer{{border-top:1px solid var(--line)}}
 .footer-inner{{
   width:min(760px,calc(100% - 40px));margin:0 auto;
-  padding:16px 0 28px;display:flex;justify-content:space-between;
-  color:var(--muted);font-size:.72rem;
+  padding:16px 0 28px;display:flex;justify-content:space-between;align-items:center;
+  color:var(--muted);font-size:.72rem;gap:16px;flex-wrap:wrap;
 }}
 @media(max-width:540px){{
-  .identity h1{{font-size:1.5rem}}
+  .hero h1{{font-size:1.6rem}}
+  .lf-row{{flex-direction:column;gap:2px}}
+  .lf-key{{min-width:unset}}
   .client-tab{{padding:8px 10px;font-size:.72rem}}
 }}
 </style>
@@ -943,25 +1012,28 @@ footer{{border-top:1px solid var(--line)}}
 
 <main class="page">
 
-  <div class="identity">
+  <div class="hero">
     <h1>{name}</h1>
+    <p class="tagline">$175M Exit (Tail-f → Cisco) &nbsp;·&nbsp; Co-founder, Avassa &nbsp;·&nbsp; 25 Years at Technical &amp; Market Intersection</p>
+    {chip_html}
+    <p class="bio">{bio}</p>
+    <div class="ext-links">
+      {ext_links_html}
+    </div>
   </div>
 
   <div class="section">
-    <div class="section-label">What this is</div>
-    <p class="prose">
-      This page is an MCP server. If your recruiting application or AI assistant speaks the
-      Model Context Protocol, you can connect it here and query {name.split()[0]}'s professional
-      profile directly: who he is, what he's looking for, and whether he's a fit for a specific role.
-      The server responds with structured data and a calibrated fit signal.
-    </p>
-    <p class="prose">
-      The endpoint is public. No API key or account needed to read the profile.
-    </p>
+    <div class="section-label">Looking for</div>
+    {lf_html}
   </div>
 
   <div class="section">
-    <div class="section-label">Connect your client</div>
+    <div class="section-label">For AI assistants</div>
+    <p class="prose">
+      {first}'s profile is queryable by AI assistants and recruiting tools via the
+      Model Context Protocol. Connect your client to retrieve structured profile data
+      and a calibrated fit signal for any role — no authentication required.
+    </p>
     <div class="client-tabs">
       <button class="client-tab active" onclick="switchTab(this,'tab-vscode')">VS Code</button>
       <button class="client-tab" onclick="switchTab(this,'tab-claude-code')">Claude Code</button>
